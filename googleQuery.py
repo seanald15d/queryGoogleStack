@@ -3,7 +3,7 @@ from datetime import timedelta, datetime, date
 import json
 
 
-def execute_search(data):
+def execute_search(data, cs):
     from googlesearch import search
     import re
 
@@ -25,6 +25,11 @@ def execute_search(data):
     print(hit_list)
     print(data["question_id"])
 
+    mongo_query = {"question_id": data["question_id"]}
+    new_values = {"$set": {"result_ids": hit_list}}
+    upsert_multi_param = {"upsert": False, "multi": False}
+
+    # cs.update_one(mongo_query, new_values, upsert_multi_param)
 
 
 def execute_query(f_d, f_e, cs):
@@ -91,7 +96,7 @@ def main(cs):
 
     print(len(d_list))
     print(d_list[25])
-    execute_search(d_list[25])
+    execute_search(d_list[25], cs)  # send cursor object and update
 
 
 if __name__ == "__main__":
