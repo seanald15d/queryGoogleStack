@@ -3,33 +3,45 @@ from datetime import timedelta, datetime, date
 import json
 
 
+def check_tables(cs, q_id_list):
+    found_list = []
+    for q_id in q_id_list:
+        found = cs.find({"question_id": q_id})
+        if len(list(found)) > 0:
+            found_list.append({q_id: True})
+        else:
+            found_list.append({q_id: False})
+    return found_list
+
+
 def execute_search(data, cs):
     from googlesearch import search
     import re
 
     # to search
     query = data["search"]
+    query_id = data["question_id"]
     print(query)
+    print(query_id)
 
     # regex
     regex = re.compile("stackoverflow.com\/questions\/(\d+)")
 
     hit_list = []
-    for j in search(query, tld="com", num=10, stop=30, pause=2):
+    for j in search(query, tld="com", num=10, stop=20, pause=2):
         x = regex.search(j)
 
         if x:
             print(j)
-            hit_list.append(x.group(1))
+            hit_list.append(int(x.group(1)))
 
     print(hit_list)
-    print(data["question_id"])
 
-    mongo_query = {"question_id": data["question_id"]}
-    new_values = {"$set": {"result_ids": hit_list}}
-    upsert_multi_param = {"upsert": False, "multi": False}
-
-    # cs.update_one(mongo_query, new_values, upsert_multi_param)
+    # check for question id objects in dataset
+    f_list = check_tables(cs, hit_list)
+    print("already have:")
+    print(f_list)
+    print(len(f_list))
 
 
 def execute_query(f_d, f_e, cs):
@@ -81,7 +93,7 @@ def find_query_dates(diff, use_date):
 def date_conversion():
     date_1 = datetime.now().date()
     # date_1 = date(2020, 1, 15)
-    fixed_date = date(2020, 1, 14)  # fix to whatever we end up starting with
+    fixed_date = date(2020, 1, 21)  # fix to whatever we end up starting with
     date_2 = date(2018, 11, 23)
 
     diff = date_2 - date_1
@@ -89,14 +101,14 @@ def date_conversion():
     return diff, fixed_date
 
 
-def main(cs):
+def main(cs, stack):
     diff, date_1 = date_conversion()
     final_date, final_end = find_query_dates(diff, date_1)
     d_list = execute_query(final_date, final_end, cs)
 
     print(len(d_list))
-    print(d_list[25])
-    execute_search(d_list[25], cs)  # send cursor object and update
+    print(d_list[4])
+    execute_search(d_list[4], cs)  # send cursor object and update
 
 
 if __name__ == "__main__":
@@ -111,4 +123,6 @@ if __name__ == "__main__":
 
     cursor = connection[DB_NAME][COLLECTION_NAME]
 
-    main(cursor)
+    stack_key = creds["stack"]
+
+    main(cursor, stack_key)
