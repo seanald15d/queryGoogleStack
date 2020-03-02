@@ -2,46 +2,38 @@ from pymongo import MongoClient
 from datetime import timedelta, datetime, date
 import json
 
+from stackapi import StackAPI
+
 
 def check_tables(cs, q_id_list):
-    found_list = []
+    found_dict = {}
     for q_id in q_id_list:
         found = cs.find({"question_id": q_id})
         if len(list(found)) > 0:
-            found_list.append({q_id: True})
+            found_dict[q_id] = True
         else:
-            found_list.append({q_id: False})
-    return found_list
+            found_dict[q_id] = False
+    return found_dict
 
 
-def execute_search(data, cs):
+def execute_search(query, query_id, cs):
     from googlesearch import search
     import re
 
-    # to search
-    query = data["search"]
-    query_id = data["question_id"]
-    print(query)
-    print(query_id)
-
     # regex
-    regex = re.compile("stackoverflow.com\/questions\/(\d+)")
+    regex = re.compile(r"stackoverflow.com\/questions\/(\d+)")
 
     hit_list = []
     for j in search(query, tld="com", num=10, stop=20, pause=2):
         x = regex.search(j)
 
         if x:
-            print(j)
             hit_list.append(int(x.group(1)))
 
-    print(hit_list)
-
     # check for question id objects in dataset
-    f_list = check_tables(cs, hit_list)
-    print("already have:")
-    print(f_list)
-    print(len(f_list))
+    f_dict = check_tables(cs, hit_list)
+
+    return f_dict
 
 
 def execute_query(f_d, f_e, cs):
@@ -93,7 +85,7 @@ def find_query_dates(diff, use_date):
 def date_conversion():
     date_1 = datetime.now().date()
     # date_1 = date(2020, 1, 15)
-    fixed_date = date(2020, 1, 21)  # fix to whatever we end up starting with
+    fixed_date = date(2020, 3, 2)  # fix to whatever we end up starting with
     date_2 = date(2018, 11, 23)
 
     diff = date_2 - date_1
@@ -101,17 +93,53 @@ def date_conversion():
     return diff, fixed_date
 
 
+def stack_get(s, ft, fd, query_id):
+    wanted_list = []
+    for key, value in fd.items():
+        fetched = s.fetch('questions', min=0, tagged='python', ids=[key], filter=ft)
+        wanted = fetched["items"]
+
+        wanted[0]["have"] = value
+
+        if query_id == wanted[0]["question_id"]:
+            print("yes")
+            wanted[0]["query_returned"] = True
+        else:
+            wanted[0]["query_returned"] = False
+
+        wanted_list.append(wanted[0])
+
+    return wanted_list
+
+
 def main(cs, stack):
+    # convert date features
     diff, date_1 = date_conversion()
     final_date, final_end = find_query_dates(diff, date_1)
+
+    # execute query by date info
     d_list = execute_query(final_date, final_end, cs)
 
-    print(len(d_list))
-    print(d_list[4])
-    execute_search(d_list[4], cs)  # send cursor object and update
+    # testing
+    sample = d_list[4]  # need to figure out iteration for later
+
+    # grab question and id
+    q = sample["search"]
+    q_id = sample["question_id"]
+
+    # use search string and id to find data
+    found = execute_search(q, q_id, cs)  # send cursor object and update
+
+    # initialize Stack Site object
+    SITE = StackAPI('stackoverflow', key=stack)
+    stack_filter = '!XmOXGYnbuPy6YZtIUfanN(13CtPwYvG)CJ-bl4ZXOTIKka.Whd*cBhhxm(IJudjkLx_qt(SD'
+
+    # find google hits from Stack Overflow
+    results = stack_get(SITE, stack_filter, found, q_id)
 
 
 if __name__ == "__main__":
+    # load credentials from file
     with open("credentials.json", "r") as f1:
         creds = json.load(f1)["keys"]
         f1.close()
@@ -125,4 +153,5 @@ if __name__ == "__main__":
 
     stack_key = creds["stack"]
 
+    # initialize main function
     main(cursor, stack_key)
